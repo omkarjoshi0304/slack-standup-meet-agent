@@ -1,0 +1,25 @@
+# Env / secrets
+.env
+.env.*
+*.pem
+credentials*.json
+token*.json
+
+# Node
+node_modules/
+dist/
+build/
+npm-debug.log*
+yarn-error.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
