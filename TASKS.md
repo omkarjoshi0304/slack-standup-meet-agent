@@ -102,8 +102,16 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
 
 ## Epic C — Integrations & data (Person C, Python)
 
-- [ ] **C1** `integrations/auth0_vault.get_token`: fetch per-user delegated tokens (Jira,
-  Google) from Auth0 Token Vault; identity mapping slack_user_id → auth0_user_id. — (dep: F3)
+- [x] **C1** `integrations/auth0_vault.get_token` implemented: exchanges a user's stored
+  `User.auth0_refresh_token` (added to the model — populated later by C2) for a federated
+  connection's access token via Auth0 Token Vault's token-exchange grant, using
+  `auth0-python`'s `GetToken.access_token_for_connection` (not `auth0-ai`/`auth0-ai-langchain`
+  — those pull in an incompatible langchain/langgraph and openfga-sdk we don't need).
+  Connection name per provider comes from `AUTH0_GOOGLE_CONNECTION`/`AUTH0_JIRA_CONNECTION`.
+  Raises a clear `RuntimeError` if the user hasn't linked yet (C2's job). Tested with the
+  real Auth0 SDK class mocked at the HTTP boundary (`tests/test_auth0_vault.py`, 4 cases);
+  full suite 10/10 passing, including a clean-room `pip install` re-verification.
+  — (dep: F3) — *C*
 - [ ] **C2** One-time account-linking flow: DM a user an Auth0 connect URL; handle the
   callback; persist the mapping. — (dep: C1)
 - [ ] **C3** `integrations/jira_client.get_sprint_issues`: JQL
