@@ -67,67 +67,75 @@ MeetingRequest{ id, thread_ts, organizer_id, attendee_ids[], window,
 
 ## 4. API / System Interface
 
+> **Architecture: hybrid.** Slack is handled by the **CopilotKit Channels** managed runtime
+> (Node), which reaches our **Python LangGraph agent** over the **AG-UI protocol**
+> (`AGENT_URL`). Channels hosts the public URL — **no Socket Mode, no tunnel/ngrok**. Note:
+> managed Slack apps get **no slash commands**, so all interaction is via `@mention`
+> (which is what we want). Interactivity/`block_actions` still work if we ever enable an
+> approval toggle. The **scheduled** standup has no triggering mention, so the Python
+> scheduler posts it via the **Slack Web API (`chat.postMessage`) directly**.
+
 | Trigger | Source | Handler |
 |---|---|---|
-| `app_mention` (`@dailyagent …`, `@meetagent …`) | Slack Events API | ack → enqueue `HandleMention` |
-| `message` in watched thread | Slack Events API | intent check → maybe enqueue |
-| `block_actions` (optional Approve/Reject) | Slack interactivity | only if `require_approval` toggle is on |
-| scheduler tick | internal cron | enqueue `RunStandup(config_id, date)` |
-| OAuth callback | Auth0 redirect | store identity mapping |
+| `onMention` (`@dailyagent …`, `@meetagent …`) | CopilotKit Channels | subscribe thread → invoke LangGraph agent |
+| `onMessage` in a subscribed thread | CopilotKit Channels | invoke agent (follow-ups) |
+| scheduled standup tick | Python APScheduler | run standup agent → post via Slack Web API |
+| account linking callback | Auth0 redirect | store identity mapping |
 
-Everything beyond the 3s ack is a **job on a queue** processed by workers.
+Channels handles the Slack 3s ACK for us; the LangGraph agent does the real work behind AG-UI.
 
 ## 5. High-Level Design
 
 ```
-        Slack Workspace  (#team-standup, threads, buttons)
-                |  events / interactions / mentions
+        Slack Workspace  (#team-standup, threads, native cards)
+                |  mentions / thread messages
                 v
-     +-------------------------+   ack < 3s, then enqueue
-     |  Slack Gateway (Bolt)   |--------------+
-     |  - verify signature     |              |
-     |  - fast ACK             |              v
-     +-------------------------+        +-----------+
-                ^  post digest / cards   | Job Queue | (Redis/SQS)
-                |                        +-----+-----+
-     +----------+-----------+                  |
-     |  Scheduler Service    |-enqueue RunStandup
-     |  (durable cron per    |                  |
-     |   StandupConfig, tz)  |                  v
-     +----------------------+        +----------------------+
-                                     |   Agent Workers       |
-                                     |  - Standup Agent      |
-                                     |  - Meeting Agent      |
-                                     |   LLM (OpenAI/Claude) |
-                                     +---+-------------+-----+
-                    on-behalf tokens     |             |
-              +-----------------------+---v--+   +------v-----+
-              |  Auth0 Token Vault           |   | Postgres   |
-              | (per-user Jira + Google)     |   | configs,   |
-              +----+------------------+------+   | runs       |
-                   v                  v          +------------+
-             Jira REST API     Google Calendar API
+     +------------------------------------+   (managed URL, hosts 3s ACK)
+     |  CopilotKit Channels  (Node)       |
+     |  - onMention / onMessage           |
+     |  - defineChannelComponent (cards)  |
+     +------------------+-----------------+
+                        |  AG-UI over AGENT_URL
+                        v
+     +------------------------------------+     +------------------------+
+     |  Python LangGraph Agent            |<----|  APScheduler (Python)  |
+     |  (OpenAI model)                    |     |  cron per StandupConfig|
+     |  tools:                            |     |  -> run standup, post  |
+     |   - jira / google / auth0 / slots  |     |     via Slack Web API  |
+     +---+-------------+-------------+-----+     +------------------------+
+         | on-behalf   |             |
+    +----v------+  +---v----------+  +--v---------+
+    |  Auth0    |  |  Jira REST   |  |  Google    |     +-----------+
+    |  Token    |  |  (JQL,       |  |  Calendar  |     | SQLite    |
+    |  Vault    |  |   httpx)     |  |  API       |     | (configs, |
+    +-----------+  +--------------+  +------------+     |  runs)    |
+     per-user Jira + Google tokens                     +-----------+
 ```
 
-**Standup flow:** Scheduler fires → enqueue `RunStandup` → worker loads config → for each
-member fetch in-progress sprint issues from Jira (that user's token) → one LLM summary per
-person → assemble threaded digest → post via Bolt → write `StandupRun` keyed on
-`(config, date)` (idempotent).
+**Standup flow (interactive):** `@dailyagent run now` → Channels invokes the LangGraph
+agent → for each member fetch in-progress sprint issues from Jira (that user's token) →
+one LLM summary per person → render digest as a native Channels card → post in-thread →
+write `StandupRun` keyed on `(config, date)` (idempotent).
 
-**Meeting flow:** `@meetagent create a meet with @u1 @u2` → Bolt acks → enqueue
-`HandleMention` → resolve attendees → Google `freebusy.query` per attendee → compute best
-common slot → `events.insert` with `conferenceData` (Meet link) + invites →
-post confirmation card in-thread (autonomous, no approval).
+**Standup flow (scheduled):** APScheduler fires → run the standup agent directly →
+post the digest via the **Slack Web API (`chat.postMessage`)** (no mention to trigger it).
+
+**Meeting flow:** `@meetagent create a meet with @u1 @u2` → Channels invokes the agent →
+resolve attendees → Google `freebusy.query` per attendee → compute best common slot →
+`events.insert` with `conferenceData` (Meet link) + invites → post confirmation card
+in-thread (autonomous, no approval).
 
 ## 6. Tool / Sponsor Integration Map
 
 | Concern | Tool | Notes |
 |---|---|---|
-| Slack in/out, mentions, buttons, 3s ack, scheduled posts | **Slack Bolt SDK** (+ **CopilotKit channels** to bind agent to Slack) | Bolt handles the Slack app plumbing; CopilotKit hosts the agent runtime. |
-| Jira sprint issues per user | **Atlassian Jira Cloud REST API** (JQL: `assignee = X AND sprint in openSprints()`) | Wrap as an agent tool; Atlassian 3LO OAuth. |
+| Slack surface: mentions, native cards, 3s ack, managed URL | **CopilotKit Channels** (Node) | Managed Slack app; `onMention`/`onMessage`; `defineChannelComponent` for cards. Fork the **agents-everywhere-starter-kit** Slack template. **No Socket Mode, no slash commands.** |
+| Agent framework (the brain) | **LangGraph** (Python) over **AG-UI** | AG-UI partnership; the starter kit ships a LangGraph agent wired to Channels — we swap in our tools. |
+| Reasoning model | **OpenAI** (OpenRouter optional) | The model *inside* LangGraph. |
+| Jira sprint issues per user | **Atlassian Jira Cloud REST API** (JQL: `assignee = X AND sprint in openSprints()`) | LangGraph tool; `httpx`; Atlassian 3LO OAuth. |
 | Per-user delegated auth (Jira + Google) | **Auth0 for AI Agents — Token Vault** | The moat: one-time connect per engineer, agent uses each user's token. |
 | Calendar free/busy + create Meet | **Google Calendar API** (`freebusy.query`, `events.insert` + `conferenceData`) | Meet link via `conferenceDataVersion=1`. |
-| Reasoning / summarization | **OpenAI Agents SDK** or **Claude** (OpenRouter optional) | Jira/Calendar calls defined as shared agent tools. |
+| Scheduled standup posting | **Slack Web API** (`chat.postMessage`) + **APScheduler** | Proactive posts have no mention to ride on, so post directly with the bot token. |
 
 ### Interaction model
 - `@dailyagent set schedule weekdays 9:00 #standup` / `@dailyagent run now` / `@dailyagent pause`
@@ -135,11 +143,11 @@ post confirmation card in-thread (autonomous, no approval).
 
 ## 7. Deep Dives
 
-- **A. 3-second ACK → async everywhere.** Gateway only verifies signature and acks; all
-  Jira/Calendar/LLM work runs in workers off the queue.
-- **B. Reliable scheduling + idempotency.** Durable scheduler evaluates each config's cron
-  in its tz; jobs keyed `(config_id, run_date)`; worker checks for existing `StandupRun`
-  before posting. Demo fallback: Slack `chat.scheduleMessage`.
+- **A. 3-second ACK handled by Channels.** CopilotKit Channels owns the Slack endpoint and
+  the fast ACK; our LangGraph agent runs behind AG-UI without racing Slack's 3s limit.
+- **B. Reliable scheduling + idempotency.** APScheduler (Python) evaluates each config's cron
+  in its tz; runs keyed `(config_id, run_date)`; agent checks for an existing `StandupRun`
+  before posting (via Slack Web API). Demo fallback: Slack `chat.scheduleMessage`.
 - **C. Multi-user delegated auth.** Each engineer links Jira + Google once via Auth0;
   agent uses that user's token per action. Least-privilege, auditable, revocable.
 - **D. Common-slot algorithm.** Merge each attendee's busy intervals over the window,
@@ -152,28 +160,36 @@ post confirmation card in-thread (autonomous, no approval).
 - Standup: manual `@dailyagent run now` + one real scheduled fire.
 - Meeting: explicit `@meetagent` mention path (passive intent-detection = stretch).
 - One Slack workspace, 3 seeded engineers with linked Google + Jira.
-- Fully winnable in one day with 4 people.
+- Fully winnable in one day with 3 people.
 
-## 9. Tech stack (Python)
+## 9. Tech stack (hybrid)
 
-- **Slack:** `slack_bolt` (Socket Mode — no public URL needed for dev)
-- **Scheduling:** `APScheduler` (cron per StandupConfig, timezone-aware)
-- **Persistence:** `SQLModel` + SQLite (hackathon); Postgres-ready
-- **Jira:** `httpx` against Jira Cloud REST (JQL)
-- **Google Calendar:** `google-api-python-client` (`freebusy`, `events.insert`)
-- **Delegated auth:** Auth0 for AI Agents — Token Vault (per-user Jira + Google tokens)
-- **LLM:** OpenAI Agents SDK **or** Anthropic SDK (Claude); `httpx`, `pydantic`, `python-dotenv`
-- **Async work:** Bolt acks fast, then work runs in a background thread/executor
-  (RQ + Redis optional if we want a real queue)
+**Slack surface (Node — thin, from starter kit)**
+- **CopilotKit Channels** (`@copilotkit/runtime`, `@copilotkit/channels`) — managed Slack
+  app, `onMention`/`onMessage`, `defineChannelComponent` for native cards.
+- Forked from **CopilotKit/agents-everywhere-starter-kit** (`apps/channel` Slack template).
+
+**Agent + logic (Python — where our code lives)**
+- **LangGraph** — the agent, exposed over **AG-UI** so Channels can reach it (`AGENT_URL`).
+- **OpenAI** — the reasoning model inside LangGraph (OpenRouter optional).
+- **Scheduling:** `APScheduler` (cron per StandupConfig, timezone-aware).
+- **Scheduled posting:** Slack Web API (`slack_sdk` `chat.postMessage`) for the proactive
+  standup (no mention to ride on).
+- **Persistence:** `SQLModel` + SQLite (hackathon); Postgres-ready.
+- **Jira:** `httpx` against Jira Cloud REST (JQL).
+- **Google Calendar:** `google-api-python-client` (`freebusy`, `events.insert`).
+- **Delegated auth:** Auth0 for AI Agents — Token Vault (per-user Jira + Google tokens).
+- **Utils:** `pydantic`, `python-dotenv`.
 
 ## 10. Team split (3 people)
 
-- **Person A — Slack surface:** Bolt app, event/mention handlers, mention parsing,
-  Block Kit formatting, posting standup digests + meeting confirmations.
-- **Person B — Agent core:** LLM tool loop, standup summarization, meeting reasoning +
-  common-slot algorithm, `@dailyagent`/`@meetagent` command parsing.
-- **Person C — Integrations & data:** Auth0 Token Vault, Jira client, Google Calendar
-  client, DB models/persistence, APScheduler.
+- **Person A — Slack surface (Channels):** fork/run the starter-kit Slack template, provision
+  the Channel, wire `AGENT_URL` to our Python agent, build `defineChannelComponent` cards
+  for the standup digest + meeting confirmation. (Thin Node layer — mostly config.)
+- **Person B — Agent core (LangGraph, Python):** the LangGraph graph + AG-UI server, standup
+  summarization, meeting reasoning + common-slot algorithm, mention/command parsing.
+- **Person C — Integrations & data (Python):** Auth0 Token Vault, Jira client, Google Calendar
+  client (as LangGraph tools), DB models/persistence, APScheduler + scheduled Slack posting.
 
 Demo, video, README, and the social post are shared, owned by whoever finishes first.
 
