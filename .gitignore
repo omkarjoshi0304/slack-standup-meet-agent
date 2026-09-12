@@ -27,3 +27,6 @@ venv/
 .DS_Store
 .idea/
 .vscode/
+
+# Playwright MCP debug artifacts
+.playwright-mcp/
