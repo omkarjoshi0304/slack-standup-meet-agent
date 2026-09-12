@@ -71,10 +71,18 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
   dashboard's **State** tab shows the agent correctly generating `"echo: hello"` for real
   Slack mentions. **Blocked:** the generated reply never appears in Slack — confirmed in two
   different channels (one Slack Connect, one plain), reply text not found via Slack search.
-  CopilotKit's dashboard reports delivery `complete` regardless, so the failure is silent on
-  both ends. Root cause not yet identified — likely a CopilotKit-hosted-adapter-side issue,
-  since posting happens on their infrastructure, not in our listener. One bot count and single
-  Channel decision locked (see `channels/README.md`). — (dep: F1)
+  Local code is ruled out: wrapping `thread.runAgent()` in `channel.ts` with a try/catch that
+  logs the raw error (temporarily, reverted after) caught zero exceptions on a delivery that
+  still never reached Slack. The CopilotKit dashboard's Channels list shows the channel's real
+  status as **"Delivery failing"**, failure code `CHANNEL_HEALTH_ERROR`, with `Agent: Not
+  declared` persisting even while the channel reports `Online` elsewhere in the same
+  dashboard — these two status surfaces disagree with each other. The per-turn History log
+  shows one explicit failure (`runtime_handler_failed`, "before provider output") but every
+  other turn, before and after, is marked `complete` with nothing ever appearing in Slack —
+  `complete` most likely reflects the inbound Slack webhook ack, not a successful outbound
+  post. Root cause sits inside CopilotKit's hosted delivery pipeline, after our listener's
+  handler returns; not reproducible or fixable from our repo. Filed with CopilotKit support.
+  One bot count and single Channel decision locked (see `channels/README.md`). — (dep: F1)
 - [ ] **A2** Wire `createChannel({ agent, components })` to our Python agent via `AGENT_URL`;
   verify `onMention` subscribes a thread and `onMessage` follows up. — (dep: F2)
 - [ ] **A3** `defineChannelComponent` **standup_digest** card — per person: ✅ done /
