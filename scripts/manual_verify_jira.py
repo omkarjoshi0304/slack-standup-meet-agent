@@ -26,6 +26,11 @@ from __future__ import annotations
 
 import os
 import sys
+from pathlib import Path
+
+# Running this file directly only puts scripts/ on sys.path, not the repo
+# root, so `integrations` wouldn't otherwise be importable.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import httpx
 
