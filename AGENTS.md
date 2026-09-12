@@ -98,6 +98,13 @@ MeetingRequest{ id, thread_ts, organizer_id, attendee_ids[], window,
 
 ## Conventions
 
+- Always use red/green TDD when building a new feature or modifying existing code.
+- Keep SOLID, DRY, KISS, YAGNI principles. Implementation must be the simplest of any
+  possible solutions and the most efficient in terms of time and space complexity.
+- Use concurrency and async when appropriate.
+- Depending on the situation, use Creational patterns or Structural patterns or
+  Behavioral patterns.
+- The code must be secured from OWASP Top 10:2025 vulnerabilities.
 - Type hints everywhere; `pydantic` models for external API payloads.
 - No secrets in code or git. All config via env vars listed in `.env.example`.
 - Keep integrations behind thin client classes so they can be mocked in tests and demoed
