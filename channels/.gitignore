@@ -1,0 +1,5 @@
+# Added by CopilotKit CLI: managed Channel setup credentials and artifacts.
+.env
+.env.*
+!.env.example
+.copilotkit/artifacts/

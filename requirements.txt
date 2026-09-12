@@ -1,12 +1,15 @@
 # --- Agent / AG-UI (F2) ---
 # ag-ui-langgraph (not the `copilotkit` PyPI package) is what we verified actually
 # exposes a LangGraph graph over AG-UI correctly — see agent/main.py.
-ag-ui-langgraph
+# Pinned: an unpinned `pip install auth0-ai-langchain` previously downgraded
+# langgraph/langchain-core below what ag-ui-langgraph needs and broke the AG-UI
+# server. Bump these together, deliberately, if you ever need to.
+ag-ui-langgraph==0.0.45
+langgraph==1.2.11
+langchain-core==1.6.3
+langchain-openai==1.6.2
 fastapi
 uvicorn[standard]
-langgraph
-langchain-core
-langchain-openai
 
 # --- Persistence (F4) ---
 sqlmodel
@@ -17,6 +20,11 @@ google-api-python-client
 google-auth
 slack_sdk
 apscheduler
+# Auth0 Token Vault (C1). Not `auth0-ai`/`auth0-ai-langchain` — those pull in
+# openfga-sdk and an incompatible langchain/langgraph, which we don't need for
+# a plain get_token() call. auth0-python's GetToken.access_token_for_connection
+# is the verified, lower-level building block.
+auth0-python
 
 # --- Shared ---
 pydantic

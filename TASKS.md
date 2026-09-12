@@ -63,8 +63,18 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
 
 ## Epic A — Slack surface / CopilotKit Channels (Person A, Node)
 
-- [ ] **A1** Provision the Channel (`copilotkit channels add --adapter slack`); set the
-  Slack **Bot User OAuth Token** + **Signing Secret**; confirm status `online`. — (dep: F1)
+- [~] **A1** Provision the Channel — dashboard-first flow used (see `channels/README.md`).
+  Channel `mytro` created, Slack app installed with all 17 bot scopes (verified in Slack's
+  OAuth & Permissions page, including `chat:write`), Bot Token + Signing Secret set, channel
+  shows **Online** in the CopilotKit dashboard. `npm run doctor` passes. Local listener boots
+  and reaches `online`. AG-UI round-trip to the Python agent is proven end-to-end: the
+  dashboard's **State** tab shows the agent correctly generating `"echo: hello"` for real
+  Slack mentions. **Blocked:** the generated reply never appears in Slack — confirmed in two
+  different channels (one Slack Connect, one plain), reply text not found via Slack search.
+  CopilotKit's dashboard reports delivery `complete` regardless, so the failure is silent on
+  both ends. Root cause not yet identified — likely a CopilotKit-hosted-adapter-side issue,
+  since posting happens on their infrastructure, not in our listener. One bot count and single
+  Channel decision locked (see `channels/README.md`). — (dep: F1)
 - [ ] **A2** Wire `createChannel({ agent, components })` to our Python agent via `AGENT_URL`;
   verify `onMention` subscribes a thread and `onMessage` follows up. — (dep: F2)
 - [ ] **A3** `defineChannelComponent` **standup_digest** card — per person: ✅ done /
@@ -118,10 +128,29 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
 
 ## Epic C — Integrations & data (Person C, Python)
 
-- [ ] **C1** `integrations/auth0_vault.get_token`: fetch per-user delegated tokens (Jira,
-  Google) from Auth0 Token Vault; identity mapping slack_user_id → auth0_user_id. — (dep: F3)
-- [ ] **C2** One-time account-linking flow: DM a user an Auth0 connect URL; handle the
-  callback; persist the mapping. — (dep: C1)
+- [x] **C1** `integrations/auth0_vault.get_token` implemented: exchanges a user's stored
+  `User.auth0_refresh_token` (added to the model — populated later by C2) for a federated
+  connection's access token via Auth0 Token Vault's token-exchange grant, using
+  `auth0-python`'s `GetToken.access_token_for_connection` (not `auth0-ai`/`auth0-ai-langchain`
+  — those pull in an incompatible langchain/langgraph and openfga-sdk we don't need).
+  Connection name per provider comes from `AUTH0_GOOGLE_CONNECTION`/`AUTH0_JIRA_CONNECTION`.
+  Raises a clear `RuntimeError` if the user hasn't linked yet (C2's job). Tested with the
+  real Auth0 SDK class mocked at the HTTP boundary (`tests/test_auth0_vault.py`, 4 cases);
+  full suite 10/10 passing, including a clean-room `pip install` re-verification.
+  — (dep: F3) — *C*
+- [x] **C2** `integrations/auth0_link.py` implemented: `build_authorize_url` (signed
+  `state` carrying slack_user_id + provider, verified real Auth0 `/authorize` params
+  including `connection_scope`), `send_link_prompt` (DMs the link via `slack_web`),
+  and `handle_callback` (exchanges the code, persists `auth0_refresh_token` +
+  best-effort `auth0_user_id` onto `User`, get-or-create). Wired as
+  `GET /link/callback` on the same FastAPI app as the AG-UI agent (`agent/main.py`),
+  with a `lifespan` hook calling `core.db.init_db()`. Verified live via FastAPI's
+  `TestClient` through the real app (not just unit tests): a signed state + mocked
+  Auth0 exchange round-trips to a persisted `User` row, and a tampered/malformed
+  state returns a clean 400. **Remaining (manual, needs a human):** for real
+  teammates linking from their own browsers, `AUTH0_REDIRECT_URI` must be a public
+  HTTPS URL registered in Auth0's Allowed Callback URLs (e.g. via ngrok) — see
+  `.env.example`. — (dep: C1) — *C*
 - [ ] **C3** `integrations/jira_client.get_sprint_issues`: JQL
   `assignee = X AND sprint in openSprints() AND status != Done` via `httpx`; normalize to
   `Issue`. — (dep: C1)
@@ -129,8 +158,10 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
   window; return busy intervals. — (dep: C1)
 - [ ] **C5** `integrations/google_calendar.create_event`: `events.insert` with
   `conferenceDataVersion=1` (auto Meet link) + attendees. — (dep: C1)
-- [ ] **C6** `integrations/slack_web.post_message`: `chat.postMessage` with Block Kit for
-  scheduled digests (bot token). — (dep: F3)
+- [x] **C6** `integrations/slack_web.post_message` + `open_dm` implemented (pulled in
+  early by C2's DM step — both share one `slack_sdk.WebClient`). `chat.postMessage`
+  for scheduled digests; `conversations_open` + `chat.postMessage` for the link DM.
+  — (dep: F3) — *C*
 - [ ] **C7** `core/scheduler.py`: APScheduler; cron job per active `StandupConfig` (tz-aware);
   job runs the standup branch and posts via C6. — (dep: F4, B5)
 - [ ] **C8** Idempotency: before posting, check/create `StandupRun` unique on
