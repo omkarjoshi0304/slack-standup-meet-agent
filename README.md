@@ -17,5 +17,9 @@ Early planning. Repo initialized with the design doc.
 
 ## Stack (planned)
 
-Slack Bolt · CopilotKit · Auth0 (Token Vault) · Jira REST · Google Calendar API ·
-OpenAI Agents SDK / Claude
+**Hybrid:** CopilotKit Channels (Node, Slack surface) ⇄ AG-UI ⇄ Python **LangGraph** agent.
+
+CopilotKit Channels · LangGraph · OpenAI · Auth0 (Token Vault) · Jira REST ·
+Google Calendar API · APScheduler · SQLModel/SQLite
+
+See [AGENTS.md](./AGENTS.md) for the architecture and [TASKS.md](./TASKS.md) for the plan.
