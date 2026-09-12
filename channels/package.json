@@ -1,0 +1,17 @@
+{
+  "name": "standup-meet-channel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/channel.ts"
+  },
+  "dependencies": {
+    "@copilotkit/runtime": "^1.65.0",
+    "@copilotkit/channels": "^0.6.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

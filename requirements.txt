@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+langgraph
+langchain-core
+copilotkit
+sqlmodel
+httpx
+google-api-python-client
+google-auth
+slack_sdk
+apscheduler
+pydantic
+python-dotenv
+pytest
