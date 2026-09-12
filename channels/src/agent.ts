@@ -5,7 +5,7 @@ import { required } from "./env";
 
 type ChannelAgentFactory = (threadId: string) => AbstractAgent;
 
-function makeAgent(threadId: string): AbstractAgent {
+export function makeAgent(threadId: string): AbstractAgent {
   const agent = new HttpAgent({ url: required("AGENT_URL") });
   agent.threadId = threadId;
   return agent;

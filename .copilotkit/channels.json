@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "channels": [
+    {
+      "name": "mytro",
+      "displayName": "Mytro",
+      "providers": {
+        "slack": {
+          "env": {
+            "botToken": "INTELLIGENCE_CHANNEL_MYTRO_SLACK_BOT_TOKEN",
+            "signingSecret": "INTELLIGENCE_CHANNEL_MYTRO_SLACK_SIGNING_SECRET"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -30,3 +30,9 @@ venv/
 
 # Playwright MCP debug artifacts
 .playwright-mcp/
+
+# Added by CopilotKit CLI: managed Channel setup credentials and artifacts.
+.copilotkit/artifacts/
+
+# Local SQLite database created by agent/main.py's init_db()
+standup_meet.db
