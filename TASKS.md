@@ -66,9 +66,11 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
 - [x] **A1** Provision the Channel — dashboard-first flow used (see `channels/README.md`).
   Channel `mytro` created, Slack app installed with all 17 bot scopes (listed in
   `channels/README.md`), Bot Token + Signing Secret set. `npm run doctor` passes, the listener
-  boots and reaches `online`, and **a real `@mytro hello` in Slack now gets `echo: …` back in
-  the reply thread** — A1's actual proof of life, observed, not inferred. One bot count and
-  single Channel decision locked (see `channels/README.md`).
+  boots and reaches `online`, and **a real `@mytro hello` in Slack got `echo: …` back in the
+  reply thread** — A1's actual proof of life, observed, not inferred. (That run was against
+  the F2 echo graph, before B1 replaced it; the fix below is what made it arrive, and it is
+  carried onto B1's nodes.) One bot count and single Channel decision locked (see
+  `channels/README.md`).
 
   **The long-running "reply never reaches Slack" blocker was ours, not CopilotKit's.**
   CopilotKit's Slack renderer (`createRunRenderer` in `@copilotkit/channels-slack`) renders
@@ -81,8 +83,9 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
   dumping the event types straight off `POST /agent` before and after the fix. The fix is in
   `agent/graph.py` (`emit_assistant_text`, dispatching `ag_ui_langgraph`'s
   `manually_emit_message` custom event); `tests/test_graph.py` asserts the event is emitted so
-  the failure mode can't come back silently. **Every node that assembles a reply itself must
-  use it** — nodes that stream from a chat model get the text events for free.
+  the failure mode can't come back silently. **Every node that produces a reply must go
+  through it.** That includes B1's react-agent branches: they call `ainvoke`, which doesn't
+  stream, so the model emits no text events of its own.
 
   Three side fixes made while chasing this, all worth keeping: `@copilotkit/runtime` bumped
   `1.70.3` → `1.71.1`; the Channel is now declared in `.copilotkit/channels.json` via
@@ -127,19 +130,37 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
 
 ## Epic B — Agent core / LangGraph (Person B, Python)
 
-- [ ] **B1** LangGraph graph skeleton + AG-UI server (`agent/main.py`, `agent/graph.py`):
-  route a mention to the `daily` or `meet` branch based on parsed intent. — (dep: F2)
-- [ ] **B2** `agent/parsing.py`: parse `@dailyagent`/`@meetagent` subcommands and extract
-  `@mention` user IDs, dates, durations from the message text. — (dep: B1)
-- [ ] **B3** `agent/tools.py`: define LangGraph tools wrapping `jira_client`,
-  `google_calendar`, `auth0_vault`, `slots` (against C's stubs first). — (dep: F5)
-- [ ] **B4** Standup summarization: given a user's sprint issues, produce
-  `{done, in_progress, blockers}` (OpenAI call + pydantic schema); one call per member,
-  parallelized. — (dep: B3)
+- [x] **B1** `agent/graph.py` rebuilt: `parse_node` (calls B2) → conditional edge to
+  `daily`/`meet`/`END` (friendly reply + end on unparseable text) → lazily-built
+  `create_react_agent` per branch, bound to the relevant B3 tools. Lazy so `import
+  agent.graph`/`agent.main` never needs `OPENAI_API_KEY` — verified: `python -c "import
+  agent.main"` succeeds with the key unset. Routing tested in `tests/test_graph.py`; the
+  react-agent nodes themselves need a real key + real integrations, not exercised here.
+  Merged with A1's delivery fix: `parse_node` and both branches are now async and emit their
+  reply via `emit_assistant_text`, because a reply that only lands in state is never rendered
+  by the Slack surface (see A1). — (dep: F2)
+- [x] **B2** `agent/parsing.py`: real `parse_mention` — single Channel/bot identity (see F1),
+  so the sub-agent is the first token of the mention text, not a separate Slack app. Handles
+  `dailyagent {run now, set schedule, pause, resume}` / `meetagent create`, extracts
+  `<@ID>` mentions and a `\d+m` duration. Free-text date ranges ("this week") deliberately
+  left to the LLM layer. Unit-tested (`tests/test_parsing.py`). — (dep: F5, not B1 — no
+  circular dep; B1 calls into B2)
+- [x] **B3** `agent/tools.py`: real orchestration — `_get_user` resolves `User` via
+  `core/db.py`, then calls the still-stubbed `integrations/*` (raises `NotImplementedError`
+  until C lands, as expected). `propose_and_book_meeting` includes the organizer's own
+  calendar in the slot search, not just attendees'. Orchestration tested against monkeypatched
+  integrations (`tests/test_tools.py`). — (dep: F5)
+- [x] **B4** `agent/summarize.py`: `summarize_issues(issues, llm=...)` +
+  `StandupSummary` pydantic schema; default `llm` uses `ChatOpenAI(...).with_structured_output`
+  (lazy import); empty issue list short-circuits without calling the model. Tested with an
+  injected fake `llm` — no network/API key needed (`tests/test_summarize.py`). — (dep: B3)
 - [ ] **B5** Standup branch: for each member fetch issues → summarize → assemble the
   `standup_digest` card payload → return to Channels. — (dep: B4, A3)
-- [ ] **B6** `agent/slots.py`: implement `best_common_slot` (merge busy intervals, invert
-  vs working hours + tz, earliest gap >= duration). Unit-tested. — (dep: F5)
+- [x] **B6** `agent/slots.py`: real `best_common_slot` — merges busy intervals with each
+  attendee's own non-working-hours blocks (9-17, per their tz via `zoneinfo`), including
+  attendees present only in `tz_by_user` (a real bug caught while writing tests — a busy-only
+  attendee with an empty list was silently skipping the working-hours check). Unit-tested
+  across busy/tz/no-fit cases (`tests/test_slots.py`). — (dep: F5)
 - [ ] **B7** Meeting branch: resolve attendees → freebusy → `best_common_slot` →
   `create_event` → return `meeting_confirmation` payload. **Autonomous, no approval.**
   — (dep: B6, A4)

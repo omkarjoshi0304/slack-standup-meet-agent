@@ -35,11 +35,12 @@ produces only `STATE_SNAPSHOT` / `MESSAGES_SNAPSHOT` on the AG-UI wire, so the d
 rendered as an empty message: the dashboard's State tab shows the right text, History logs
 `Provider delivery completed`, and Slack shows nothing at all — no error anywhere.
 
-Nodes that call a chat model with streaming get the text events for free. Nodes that
-assemble a reply themselves must emit it explicitly — see `emit_assistant_text` in
+Every node that produces a reply must emit it explicitly — see `emit_assistant_text` in
 `../agent/graph.py`, which dispatches `ag_ui_langgraph`'s `manually_emit_message` custom
-event. `tests/test_graph.py` asserts the event is emitted, so the failure mode can't return
-unnoticed.
+event. Only a chat model invoked with *streaming* produces the text events on its own; the
+react-agent branches use `ainvoke`, which does not, so they emit their final reply through
+the same helper. `tests/test_graph.py` asserts the event is emitted, so the failure mode
+can't return unnoticed.
 
 ## Card components (A3/A4)
 
