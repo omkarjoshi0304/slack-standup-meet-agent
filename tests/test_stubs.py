@@ -1,21 +1,19 @@
-"""Confirms the frozen Epic-0 interfaces exist with the agreed signatures (F5)."""
+"""Confirms the frozen Epic-0 interfaces exist with the agreed signatures (F5).
+
+auth0_vault.get_token is implemented (C1) — see tests/test_auth0_vault.py.
+"""
 from __future__ import annotations
 
 import pytest
 
 from core.models import User
 from core.types import Window
-from integrations import auth0_vault, google_calendar, jira_client, slack_web
+from integrations import google_calendar, jira_client, slack_web
 
 
 @pytest.fixture()
 def user():
     return User(slack_user_id="U1", tz="UTC")
-
-
-def test_auth0_get_token_stub(user):
-    with pytest.raises(NotImplementedError):
-        auth0_vault.get_token(user, "jira")
 
 
 def test_jira_get_sprint_issues_stub(user):
