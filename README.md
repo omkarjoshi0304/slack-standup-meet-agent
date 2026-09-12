@@ -13,7 +13,17 @@ See [PLAN.md](./PLAN.md) for the full system design.
 
 ## Status
 
-Early planning. Repo initialized with the design doc.
+F1/F2 (Epic 0 foundation) done: the CopilotKit Channels ⇄ AG-UI ⇄ Python LangGraph agent
+pipe is scaffolded and verified locally (unit tests + a live AG-UI request/response).
+Real Slack/CopilotKit credentials still need to be provisioned by the team — see
+`channels/README.md`.
+
+## Repo layout
+
+- `channels/` — CopilotKit Channels (Node), the Slack surface. See `channels/README.md`.
+- `agent/` — the Python LangGraph agent, exposed over AG-UI. See `agent/README.md`.
+- `tests/` — Python tests.
+- `PLAN.md` / `AGENTS.md` / `TASKS.md` — design, coding-agent context, task breakdown.
 
 ## Stack (planned)
 

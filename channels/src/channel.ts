@@ -1,14 +1,27 @@
-/**
- * CopilotKit Channels entry point — Slack surface only. Business logic lives
- * in the Python LangGraph agent (see /agent), reached over AG-UI via
- * AGENT_URL. This file intentionally does not implement createChannel yet.
- *
- * TODO(A, F1): fork apps/channel from CopilotKit/agents-everywhere-starter-kit,
- * provision the managed Channel, and replace this stub with the real
- * createChannel({ name: CHANNEL_CODE, identifyUser: "platform", agent,
- * components }) wiring — see PLAN.md and AGENTS.md for the target shape.
- * `agent` should be an AG-UI HttpAgent pointed at AGENT_URL, not the starter
- * kit's BuiltInAgent (our agent runs as a separate Python process).
- */
+import { createChannel } from "@copilotkit/channels";
+import { makeChannelAgent } from "./agent";
+import { required } from "./env";
 
-export const AGENT_URL = process.env.AGENT_URL ?? "http://localhost:8000";
+// Standup digest and meeting confirmation cards land in tasks A3/A4 as
+// defineChannelComponent entries, registered here via `components: [...]`.
+export const channel = createChannel({
+  // Must equal the Channel Code provisioned via `copilotkit channels add`.
+  name: required("CHANNEL_CODE"),
+  identifyUser: "platform",
+  agent: makeChannelAgent,
+});
+
+// A mention subscribes the thread, so the agent follows along afterward
+// instead of needing to be @-mentioned on every turn.
+channel.onMention(async ({ thread }) => {
+  await thread.subscribe();
+  await thread.runAgent();
+});
+
+// Non-mentioned turns only reach onMessage — gate on subscription so the
+// agent doesn't answer every message in every channel it's invited to.
+channel.onMessage(async ({ thread }) => {
+  if (await thread.isSubscribed()) {
+    await thread.runAgent();
+  }
+});

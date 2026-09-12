@@ -1,22 +1,29 @@
-"""AG-UI server exposing the LangGraph graph, so CopilotKit Channels can reach
-it via AGENT_URL. F2/B1.
+"""AG-UI server exposing our LangGraph agent.
 
-TODO(B): verify the exact CopilotKit Python SDK call for mounting a LangGraph
-graph as an AG-UI endpoint against the current `copilotkit` package version —
-not confirmed here, don't guess it into place without checking the installed
-version's docs first.
+CopilotKit Channels reaches this over AG-UI at AGENT_URL (see channels/src/agent.ts).
+Run with: uvicorn agent.main:app --reload --port 8000
+
+Verified against the installed `ag-ui-langgraph` package (not the `copilotkit` PyPI
+package, which targets a different/older CopilotKit protocol, not AG-UI): a real
+AG-UI RunAgentInput POST to /agent returns a correct SSE stream ending in
+MESSAGES_SNAPSHOT -> RUN_FINISHED.
 """
-from __future__ import annotations
 
+from ag_ui_langgraph import LangGraphAgent, add_langgraph_fastapi_endpoint
+from dotenv import load_dotenv
 from fastapi import FastAPI
 
-app = FastAPI()
+from agent.graph import graph
+
+load_dotenv()
+
+app = FastAPI(title="slack-standup-meet-agent")
+
+langgraph_agent = LangGraphAgent(name="standup-meet-agent", graph=graph)
+
+add_langgraph_fastapi_endpoint(app, langgraph_agent, "/agent")
 
 
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
-
-
-# TODO(B): mount agent.graph.build_graph() as an AG-UI endpoint here so
-# Channels' AGENT_URL can reach it.
