@@ -10,6 +10,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, MessagesState, StateGraph
 
 from agent.parsing import ParsedCommand, parse_mention
+from agent.prompts import MEETING_REASONING_SYSTEM_PROMPT, STANDUP_SUMMARY_SYSTEM_PROMPT
 from agent.tools import get_free_busy, get_sprint_summary, propose_and_book_meeting
 
 DAILY_TOOLS = [get_sprint_summary]
@@ -47,7 +48,7 @@ def _daily_agent():
     from langchain_openai import ChatOpenAI
     from langgraph.prebuilt import create_react_agent
 
-    return create_react_agent(ChatOpenAI(model="gpt-4o-mini"), DAILY_TOOLS)
+    return create_react_agent(ChatOpenAI(model="gpt-4o-mini"), DAILY_TOOLS, prompt=STANDUP_SUMMARY_SYSTEM_PROMPT)
 
 
 @lru_cache(maxsize=1)
@@ -55,7 +56,7 @@ def _meet_agent():
     from langchain_openai import ChatOpenAI
     from langgraph.prebuilt import create_react_agent
 
-    return create_react_agent(ChatOpenAI(model="gpt-4o-mini"), MEET_TOOLS)
+    return create_react_agent(ChatOpenAI(model="gpt-4o-mini"), MEET_TOOLS, prompt=MEETING_REASONING_SYSTEM_PROMPT)
 
 
 def daily_node(state: AgentState) -> dict:
