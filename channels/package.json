@@ -1,0 +1,25 @@
+{
+  "name": "channels",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "CopilotKit Channels Slack surface. Forwards mentions to the Python LangGraph agent over AG-UI (see ../agent).",
+  "scripts": {
+    "dev": "node --env-file=../.env --import tsx --watch src/server.ts",
+    "start": "node --env-file=../.env --import tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test 'src/**/*.test.ts'"
+  },
+  "dependencies": {
+    "@ag-ui/client": "0.0.59",
+    "@ag-ui/core": "0.0.59",
+    "@copilotkit/channels": "0.9.2",
+    "@copilotkit/runtime": "1.70.3",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

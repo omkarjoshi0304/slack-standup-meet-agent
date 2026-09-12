@@ -14,12 +14,21 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · **(dep: …)** = depend
 
 ## Epic 0 — Foundation (shared, hour 0–1)
 
-- [ ] **F1** Fork **CopilotKit/agents-everywhere-starter-kit**; get the `apps/channel` Slack
-  template running (`npm ci`, `.env`, `npm run dev:slack`); confirm the sample agent replies
-  to a mention in a test Slack channel. — *A*
-- [ ] **F2** Stand up the Python side: repo layout from `AGENTS.md`, `requirements.txt`,
-  a minimal **LangGraph agent exposed over AG-UI** that echoes; point the Channels
-  `AGENT_URL` at it and confirm end-to-end mention → Python → reply. — *B*
+- [x] **F1** `channels/` scaffolded (trimmed from the starter kit's `apps/channel` pattern —
+  `env.ts`, `agent.ts` with an `HttpAgent` pointed at `AGENT_URL`, `channel.ts`
+  (`onMention`/`onMessage`, no cards yet), `server.ts`). `npm install`, `npm test`, and
+  `tsc --noEmit` all pass. Boot-tested with placeholder credentials: fails cleanly at the
+  real-credential boundary (`ChannelConfigError` on the CopilotKit API key format), as
+  expected. **Remaining (manual, needs a human):** sign up for CopilotKit Intelligence,
+  create the Slack app, run `copilotkit channels add`, and confirm a live mention reply in
+  Slack — see `channels/README.md`. — *A*
+- [x] **F2** `agent/` scaffolded: `graph.py` (echo `MessagesState` graph with a `MemorySaver`
+  checkpointer — AG-UI needs one for per-thread state) and `main.py` (FastAPI +
+  `LangGraphAgent` + `add_langgraph_fastapi_endpoint` mounted at `/agent`). Verified for
+  real: unit test passes (`tests/test_graph.py`) and a live AG-UI `RunAgentInput` POST to
+  `/agent` returns a correct SSE stream ending in `MESSAGES_SNAPSHOT` →
+  `"echo: hello"` → `RUN_FINISHED`. End-to-end Slack → Channels → this agent still needs F1's
+  manual credentialing step to observe in Slack itself. — *B*
 - [ ] **F3** `core/config.py` + `.env.example`: all env vars (Channels/Slack tokens, Auth0,
   Jira base URL, Google creds, OpenAI key, `AGENT_URL`). — *C*
 - [ ] **F4** `core/models.py` + `core/db.py`: SQLModel entities (Workspace, User,
