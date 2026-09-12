@@ -26,6 +26,9 @@ class User(SQLModel, table=True):
     # Set by the C2 account-linking flow. C1 exchanges this for a federated
     # connection's access token via Auth0 Token Vault.
     auth0_refresh_token: str | None = None
+    # The Auth0 "sub" claim from the linked account's id_token. Informational
+    # only (never used for authorization) — not signature-verified.
+    auth0_user_id: str | None = None
 
 
 class StandupConfig(SQLModel, table=True):

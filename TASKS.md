@@ -112,8 +112,19 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
   real Auth0 SDK class mocked at the HTTP boundary (`tests/test_auth0_vault.py`, 4 cases);
   full suite 10/10 passing, including a clean-room `pip install` re-verification.
   — (dep: F3) — *C*
-- [ ] **C2** One-time account-linking flow: DM a user an Auth0 connect URL; handle the
-  callback; persist the mapping. — (dep: C1)
+- [x] **C2** `integrations/auth0_link.py` implemented: `build_authorize_url` (signed
+  `state` carrying slack_user_id + provider, verified real Auth0 `/authorize` params
+  including `connection_scope`), `send_link_prompt` (DMs the link via `slack_web`),
+  and `handle_callback` (exchanges the code, persists `auth0_refresh_token` +
+  best-effort `auth0_user_id` onto `User`, get-or-create). Wired as
+  `GET /link/callback` on the same FastAPI app as the AG-UI agent (`agent/main.py`),
+  with a `lifespan` hook calling `core.db.init_db()`. Verified live via FastAPI's
+  `TestClient` through the real app (not just unit tests): a signed state + mocked
+  Auth0 exchange round-trips to a persisted `User` row, and a tampered/malformed
+  state returns a clean 400. **Remaining (manual, needs a human):** for real
+  teammates linking from their own browsers, `AUTH0_REDIRECT_URI` must be a public
+  HTTPS URL registered in Auth0's Allowed Callback URLs (e.g. via ngrok) — see
+  `.env.example`. — (dep: C1) — *C*
 - [ ] **C3** `integrations/jira_client.get_sprint_issues`: JQL
   `assignee = X AND sprint in openSprints() AND status != Done` via `httpx`; normalize to
   `Issue`. — (dep: C1)
@@ -121,8 +132,10 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
   window; return busy intervals. — (dep: C1)
 - [ ] **C5** `integrations/google_calendar.create_event`: `events.insert` with
   `conferenceDataVersion=1` (auto Meet link) + attendees. — (dep: C1)
-- [ ] **C6** `integrations/slack_web.post_message`: `chat.postMessage` with Block Kit for
-  scheduled digests (bot token). — (dep: F3)
+- [x] **C6** `integrations/slack_web.post_message` + `open_dm` implemented (pulled in
+  early by C2's DM step — both share one `slack_sdk.WebClient`). `chat.postMessage`
+  for scheduled digests; `conversations_open` + `chat.postMessage` for the link DM.
+  — (dep: F3) — *C*
 - [ ] **C7** `core/scheduler.py`: APScheduler; cron job per active `StandupConfig` (tz-aware);
   job runs the standup branch and posts via C6. — (dep: F4, B5)
 - [ ] **C8** Idempotency: before posting, check/create `StandupRun` unique on
