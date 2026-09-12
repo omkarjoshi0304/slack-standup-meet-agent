@@ -29,11 +29,11 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · **(dep: …)** = depend
   `/agent` returns a correct SSE stream ending in `MESSAGES_SNAPSHOT` →
   `"echo: hello"` → `RUN_FINISHED`. End-to-end Slack → Channels → this agent still needs F1's
   manual credentialing step to observe in Slack itself. — *B*
-- [ ] **F3** `core/config.py` + `.env.example`: all env vars (Channels/Slack tokens, Auth0,
+- [x] **F3** `core/config.py` + `.env.example`: all env vars (Channels/Slack tokens, Auth0,
   Jira base URL, Google creds, OpenAI key, `AGENT_URL`). — *C*
-- [ ] **F4** `core/models.py` + `core/db.py`: SQLModel entities (Workspace, User,
+- [x] **F4** `core/models.py` + `core/db.py`: SQLModel entities (Workspace, User,
   StandupConfig, StandupRun, MeetingRequest) + SQLite engine/session. — *C*
-- [ ] **F5** Freeze the shared interfaces below as stubs so A/B/C don't block each other. — *all*
+- [x] **F5** Freeze the shared interfaces below as stubs so A/B/C don't block each other. — *all*
 
 ### Shared interfaces (freeze these in hour 1)
 ```python

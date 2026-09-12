@@ -1,7 +1,24 @@
+# --- Agent / AG-UI (F2) ---
+# ag-ui-langgraph (not the `copilotkit` PyPI package) is what we verified actually
+# exposes a LangGraph graph over AG-UI correctly — see agent/main.py.
 ag-ui-langgraph
 fastapi
 uvicorn[standard]
 langgraph
+langchain-core
 langchain-openai
+
+# --- Persistence (F4) ---
+sqlmodel
+
+# --- Integrations (C epic) ---
+httpx
+google-api-python-client
+google-auth
+slack_sdk
+apscheduler
+
+# --- Shared ---
+pydantic
 python-dotenv
 pytest
