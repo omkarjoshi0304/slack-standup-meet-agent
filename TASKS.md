@@ -63,35 +63,65 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
 
 ## Epic A — Slack surface / CopilotKit Channels (Person A, Node)
 
-- [~] **A1** Provision the Channel — dashboard-first flow used (see `channels/README.md`).
-  Channel `mytro` created, Slack app installed with all 17 bot scopes (verified in Slack's
-  OAuth & Permissions page, including `chat:write`), Bot Token + Signing Secret set, channel
-  shows **Online** in the CopilotKit dashboard. `npm run doctor` passes. Local listener boots
-  and reaches `online`. AG-UI round-trip to the Python agent is proven end-to-end: the
-  dashboard's **State** tab shows the agent correctly generating `"echo: hello"` for real
-  Slack mentions. **Blocked:** the generated reply never appears in Slack — confirmed in two
-  different channels (one Slack Connect, one plain), reply text not found via Slack search.
-  Local code is ruled out: wrapping `thread.runAgent()` in `channel.ts` with a try/catch that
-  logs the raw error (temporarily, reverted after) caught zero exceptions on a delivery that
-  still never reached Slack. The CopilotKit dashboard's Channels list shows the channel's real
-  status as **"Delivery failing"**, failure code `CHANNEL_HEALTH_ERROR`, with `Agent: Not
-  declared` persisting even while the channel reports `Online` elsewhere in the same
-  dashboard — these two status surfaces disagree with each other. The per-turn History log
-  shows one explicit failure (`runtime_handler_failed`, "before provider output") but every
-  other turn, before and after, is marked `complete` with nothing ever appearing in Slack —
-  `complete` most likely reflects the inbound Slack webhook ack, not a successful outbound
-  post. Root cause sits inside CopilotKit's hosted delivery pipeline, after our listener's
-  handler returns; not reproducible or fixable from our repo. Filed with CopilotKit support.
-  One bot count and single Channel decision locked (see `channels/README.md`). — (dep: F1)
-- [ ] **A2** Wire `createChannel({ agent, components })` to our Python agent via `AGENT_URL`;
-  verify `onMention` subscribes a thread and `onMessage` follows up. — (dep: F2)
-- [ ] **A3** `defineChannelComponent` **standup_digest** card — per person: ✅ done /
-  🟡 in-progress / ❌ blockers, with Jira links (match the target screenshot). — (dep: F5)
-- [ ] **A4** `defineChannelComponent` **meeting_confirmation** card — time, attendees,
-  Meet link. — (dep: F5)
-- [ ] **A5** Confirm the bot only responds to `@dailyagent`/`@meetagent` mentions and stays
-  silent otherwise; document the required Slack scopes. — (dep: A2)
-- [ ] **A6** (stretch) Native rendering for passive meeting-intent suggestions.
+- [x] **A1** Provision the Channel — dashboard-first flow used (see `channels/README.md`).
+  Channel `mytro` created, Slack app installed with all 17 bot scopes (listed in
+  `channels/README.md`), Bot Token + Signing Secret set. `npm run doctor` passes, the listener
+  boots and reaches `online`, and **a real `@mytro hello` in Slack now gets `echo: …` back in
+  the reply thread** — A1's actual proof of life, observed, not inferred. One bot count and
+  single Channel decision locked (see `channels/README.md`).
+
+  **The long-running "reply never reaches Slack" blocker was ours, not CopilotKit's.**
+  CopilotKit's Slack renderer (`createRunRenderer` in `@copilotkit/channels-slack`) renders
+  `TEXT_MESSAGE_START/CONTENT/END`, tool-call events and custom events — it never reads
+  `MESSAGES_SNAPSHOT`. The echo graph returned its `AIMessage` in the node's state update, so
+  the AG-UI stream carried only `RUN_STARTED / STEP_STARTED / STATE_SNAPSHOT /
+  MESSAGES_SNAPSHOT / RUN_FINISHED` and **zero `TEXT_MESSAGE_*` events**. CopilotKit
+  therefore delivered an empty message and logged it, truthfully, as `Provider delivery
+  completed` — which is what made this look like a hosted-pipeline bug for so long. Proven by
+  dumping the event types straight off `POST /agent` before and after the fix. The fix is in
+  `agent/graph.py` (`emit_assistant_text`, dispatching `ag_ui_langgraph`'s
+  `manually_emit_message` custom event); `tests/test_graph.py` asserts the event is emitted so
+  the failure mode can't come back silently. **Every node that assembles a reply itself must
+  use it** — nodes that stream from a chat model get the text events for free.
+
+  Three side fixes made while chasing this, all worth keeping: `@copilotkit/runtime` bumped
+  `1.70.3` → `1.71.1`; the Channel is now declared in `.copilotkit/channels.json` via
+  `npm run channel:add` (`copilotkit channels status` previously reported `declared: false` /
+  `no_channels_declared`); and the `channel:*` npm scripts now run from the repo root, because
+  the CLI resolves `.copilotkit/` from its working directory and was otherwise maintaining a
+  second config under `channels/`. Two things that were tried and were **not** the cause: the
+  Slack app reinstall, and the scope set (`chat:write` was granted all along). The dashboard's
+  `Agent: Not declared` field is cosmetic — it stayed that way through the successful
+  delivery. — (dep: F1)
+- [x] **A2** `createChannel({ agent, components })` wired to the Python agent via `AGENT_URL`.
+  `onMention` subscribes the thread then runs the agent; `onMessage` runs it only in an
+  already-subscribed thread. The behavior lives in `channels/src/handlers.ts` so it can be
+  driven directly against a fake thread — `channels/src/handlers.test.ts` proves both paths,
+  and `channels/src/agent.test.ts` proves a fresh inner agent per run, abort propagation, and
+  that `makeAgent` builds an `HttpAgent` at `AGENT_URL`. Round trip re-verified for real this
+  session: `uvicorn agent.main:app` + an AG-UI `RunAgentInput` POST to `/agent` streams back
+  `echo: hello`. — (dep: F2)
+- [x] **A3** `defineChannelComponent` **standup_digest** card
+  (`channels/src/components/standup-digest.tsx`): header plus one section per person with
+  ✅ done / 🟡 in-progress / ❌ blocked, the summary, and Jira keys as links. The payload is a
+  frozen stub contract until B5 fills it. Verified by rendering to real Slack Block Kit
+  locally (`renderToIR` → `renderSlackMessage`, the same path the hosted pipeline uses) and
+  asserting on the JSON; `npm run cards:preview` dumps it for Block Kit Builder. — (dep: F5)
+- [x] **A4** `defineChannelComponent` **meeting_confirmation** card
+  (`channels/src/components/meeting-confirmation.tsx`): title, the booked slot rendered in the
+  event's own timezone, attendee names, emails, and the Meet link. Frozen stub contract until
+  B7 fills it; verified the same Block-Kit way as A3. — (dep: F5)
+- [x] **A5** Mention-only gating locked in by test: a message in a non-subscribed thread never
+  calls `runAgent`, and a message never subscribes a thread on its own — only a mention does
+  (`channels/src/handlers.test.ts`). Required Slack bot scopes documented in
+  `channels/README.md`, sourced from the scope table shipped in
+  `@copilotkit/channels-slack`'s README rather than invented. — (dep: A2)
+- [ ] **A6** (stretch) Native rendering for passive meeting-intent suggestions. Out of scope.
+
+> **Scope of the A2–A5 checkmarks.** Verified by `npm run doctor`, `npm test` (38 tests),
+> `npx tsc --noEmit`, a live AG-UI round trip to the Python agent, a real mention → reply in
+> Slack, and both cards rendered to real Slack Block Kit JSON. The cards themselves have not
+> yet been posted to Slack by a live agent — nothing produces those payloads until B5/B7.
 
 ---
 
