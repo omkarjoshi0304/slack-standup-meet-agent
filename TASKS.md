@@ -135,13 +135,30 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
   teammates linking from their own browsers, `AUTH0_REDIRECT_URI` must be a public
   HTTPS URL registered in Auth0's Allowed Callback URLs (e.g. via ngrok) — see
   `.env.example`. — (dep: C1) — *C*
-- [ ] **C3** `integrations/jira_client.get_sprint_issues`: JQL
-  `assignee = X AND sprint in openSprints() AND status != Done` via `httpx`; normalize to
-  `Issue`. — (dep: C1)
-- [ ] **C4** `integrations/google_calendar.get_freebusy`: `freebusy.query` per user over a
-  window; return busy intervals. — (dep: C1)
-- [ ] **C5** `integrations/google_calendar.create_event`: `events.insert` with
-  `conferenceDataVersion=1` (auto Meet link) + attendees. — (dep: C1)
+- [x] **C3** `integrations/jira_client.get_sprint_issues` implemented via
+  `POST /rest/api/3/search/jql` (**not** the old `/rest/api/3/search` — Atlassian fully
+  removed it in October 2025, confirmed before implementing, not assumed). Single-page
+  fetch (`maxResults=100`, no `nextPageToken` loop — Atlassian's community reports that
+  loop not terminating correctly on this endpoint). Maps to `Issue`. Tested with a mocked
+  `httpx.Response` (3 cases: unlinked user, happy path incl. exact JQL/headers/body
+  assertions, HTTP error propagation). **Note for whoever configures the Auth0 Jira
+  connection:** if it's Atlassian's official OAuth 2.0 (3LO) app rather than a custom
+  connection scoped to the site directly, calls need to go through
+  `https://api.atlassian.com/ex/jira/{cloudId}/...` instead of `JIRA_BASE_URL` directly
+  (requires a cloudId lookup) — flagging, not yet hit. — (dep: C1) — *C*
+- [x] **C4** `integrations/google_calendar.get_freebusy` implemented: builds a
+  `googleapiclient` `calendar v3` service from the user's delegated access token
+  (`google.oauth2.credentials.Credentials`, bare token — Token Vault handles refresh),
+  queries `freebusy().query()` for `"primary"`, maps to `BusyInterval`. — (dep: C1) — *C*
+- [x] **C5** `integrations/google_calendar.create_event` implemented: `events().insert()`
+  with `conferenceDataVersion=1` **passed as a request parameter** (verified via Google's
+  docs — passing it only in the body silently produces no Meet link, no error) +
+  `conferenceData.createRequest` for the Meet link + `attendees[].email` from
+  `User.google_account_id`. Maps the `video` entry point to `EventResult.meet_url`.
+  C4/C5 tested by mocking `_service_for` (4 cases total incl. unlinked-user guards);
+  constructor/`build()` signatures verified against the installed
+  `google-api-python-client`, not assumed. Full suite: 22/22, including a clean-room
+  `pip install` re-verification. — (dep: C1) — *C*
 - [x] **C6** `integrations/slack_web.post_message` + `open_dm` implemented (pulled in
   early by C2's DM step — both share one `slack_sdk.WebClient`). `chat.postMessage`
   for scheduled digests; `conversations_open` + `chat.postMessage` for the link DM.
