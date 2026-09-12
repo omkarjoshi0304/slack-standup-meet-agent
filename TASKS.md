@@ -20,11 +20,11 @@ Legend: `[ ]` todo · `[~]` in progress · `[x]` done · **(dep: …)** = depend
 - [ ] **F2** Stand up the Python side: repo layout from `AGENTS.md`, `requirements.txt`,
   a minimal **LangGraph agent exposed over AG-UI** that echoes; point the Channels
   `AGENT_URL` at it and confirm end-to-end mention → Python → reply. — *B*
-- [ ] **F3** `core/config.py` + `.env.example`: all env vars (Channels/Slack tokens, Auth0,
+- [x] **F3** `core/config.py` + `.env.example`: all env vars (Channels/Slack tokens, Auth0,
   Jira base URL, Google creds, OpenAI key, `AGENT_URL`). — *C*
-- [ ] **F4** `core/models.py` + `core/db.py`: SQLModel entities (Workspace, User,
+- [x] **F4** `core/models.py` + `core/db.py`: SQLModel entities (Workspace, User,
   StandupConfig, StandupRun, MeetingRequest) + SQLite engine/session. — *C*
-- [ ] **F5** Freeze the shared interfaces below as stubs so A/B/C don't block each other. — *all*
+- [x] **F5** Freeze the shared interfaces below as stubs so A/B/C don't block each other. — *all*
 
 ### Shared interfaces (freeze these in hour 1)
 ```python
