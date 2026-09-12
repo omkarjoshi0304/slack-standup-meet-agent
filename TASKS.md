@@ -79,19 +79,35 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
 
 ## Epic B — Agent core / LangGraph (Person B, Python)
 
-- [ ] **B1** LangGraph graph skeleton + AG-UI server (`agent/main.py`, `agent/graph.py`):
-  route a mention to the `daily` or `meet` branch based on parsed intent. — (dep: F2)
-- [ ] **B2** `agent/parsing.py`: parse `@dailyagent`/`@meetagent` subcommands and extract
-  `@mention` user IDs, dates, durations from the message text. — (dep: B1)
-- [ ] **B3** `agent/tools.py`: define LangGraph tools wrapping `jira_client`,
-  `google_calendar`, `auth0_vault`, `slots` (against C's stubs first). — (dep: F5)
-- [ ] **B4** Standup summarization: given a user's sprint issues, produce
-  `{done, in_progress, blockers}` (OpenAI call + pydantic schema); one call per member,
-  parallelized. — (dep: B3)
+- [x] **B1** `agent/graph.py` rebuilt: `parse_node` (calls B2) → conditional edge to
+  `daily`/`meet`/`END` (friendly reply + end on unparseable text) → lazily-built
+  `create_react_agent` per branch, bound to the relevant B3 tools. Lazy so `import
+  agent.graph`/`agent.main` never needs `OPENAI_API_KEY` — verified: `python -c "import
+  agent.main"` succeeds with the key unset. Routing tested in `tests/test_graph.py`; the
+  react-agent nodes themselves need a real key + real integrations, not exercised here.
+  — (dep: F2)
+- [x] **B2** `agent/parsing.py`: real `parse_mention` — single Channel/bot identity (see F1),
+  so the sub-agent is the first token of the mention text, not a separate Slack app. Handles
+  `dailyagent {run now, set schedule, pause, resume}` / `meetagent create`, extracts
+  `<@ID>` mentions and a `\d+m` duration. Free-text date ranges ("this week") deliberately
+  left to the LLM layer. Unit-tested (`tests/test_parsing.py`). — (dep: F5, not B1 — no
+  circular dep; B1 calls into B2)
+- [x] **B3** `agent/tools.py`: real orchestration — `_get_user` resolves `User` via
+  `core/db.py`, then calls the still-stubbed `integrations/*` (raises `NotImplementedError`
+  until C lands, as expected). `propose_and_book_meeting` includes the organizer's own
+  calendar in the slot search, not just attendees'. Orchestration tested against monkeypatched
+  integrations (`tests/test_tools.py`). — (dep: F5)
+- [x] **B4** `agent/summarize.py`: `summarize_issues(issues, llm=...)` +
+  `StandupSummary` pydantic schema; default `llm` uses `ChatOpenAI(...).with_structured_output`
+  (lazy import); empty issue list short-circuits without calling the model. Tested with an
+  injected fake `llm` — no network/API key needed (`tests/test_summarize.py`). — (dep: B3)
 - [ ] **B5** Standup branch: for each member fetch issues → summarize → assemble the
   `standup_digest` card payload → return to Channels. — (dep: B4, A3)
-- [ ] **B6** `agent/slots.py`: implement `best_common_slot` (merge busy intervals, invert
-  vs working hours + tz, earliest gap >= duration). Unit-tested. — (dep: F5)
+- [x] **B6** `agent/slots.py`: real `best_common_slot` — merges busy intervals with each
+  attendee's own non-working-hours blocks (9-17, per their tz via `zoneinfo`), including
+  attendees present only in `tz_by_user` (a real bug caught while writing tests — a busy-only
+  attendee with an empty list was silently skipping the working-hours check). Unit-tested
+  across busy/tz/no-fit cases (`tests/test_slots.py`). — (dep: F5)
 - [ ] **B7** Meeting branch: resolve attendees → freebusy → `best_common_slot` →
   `create_event` → return `meeting_confirmation` payload. **Autonomous, no approval.**
   — (dep: B6, A4)
