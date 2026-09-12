@@ -63,8 +63,18 @@ The **card contract** (A↔B): the agent returns a typed payload; Channels rende
 
 ## Epic A — Slack surface / CopilotKit Channels (Person A, Node)
 
-- [ ] **A1** Provision the Channel (`copilotkit channels add --adapter slack`); set the
-  Slack **Bot User OAuth Token** + **Signing Secret**; confirm status `online`. — (dep: F1)
+- [~] **A1** Provision the Channel — dashboard-first flow used (see `channels/README.md`).
+  Channel `mytro` created, Slack app installed with all 17 bot scopes (verified in Slack's
+  OAuth & Permissions page, including `chat:write`), Bot Token + Signing Secret set, channel
+  shows **Online** in the CopilotKit dashboard. `npm run doctor` passes. Local listener boots
+  and reaches `online`. AG-UI round-trip to the Python agent is proven end-to-end: the
+  dashboard's **State** tab shows the agent correctly generating `"echo: hello"` for real
+  Slack mentions. **Blocked:** the generated reply never appears in Slack — confirmed in two
+  different channels (one Slack Connect, one plain), reply text not found via Slack search.
+  CopilotKit's dashboard reports delivery `complete` regardless, so the failure is silent on
+  both ends. Root cause not yet identified — likely a CopilotKit-hosted-adapter-side issue,
+  since posting happens on their infrastructure, not in our listener. One bot count and single
+  Channel decision locked (see `channels/README.md`). — (dep: F1)
 - [ ] **A2** Wire `createChannel({ agent, components })` to our Python agent via `AGENT_URL`;
   verify `onMention` subscribes a thread and `onMessage` follows up. — (dep: F2)
 - [ ] **A3** `defineChannelComponent` **standup_digest** card — per person: ✅ done /
