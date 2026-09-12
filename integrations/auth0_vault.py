@@ -26,21 +26,23 @@ _REQUESTED_TOKEN_TYPE_FEDERATED_ACCESS_TOKEN = (
     "http://auth0.com/oauth/token-type/federated-connection-access-token"
 )
 
-_CONNECTION_ENV_VAR: dict[Provider, str] = {
+# Shared with integrations/auth0_link.py (C2), which needs the same
+# connection-name-per-provider lookup to build the initial /authorize URL.
+CONNECTION_ENV_VAR: dict[Provider, str] = {
     "google": "AUTH0_GOOGLE_CONNECTION",
     "jira": "AUTH0_JIRA_CONNECTION",
 }
 
 
-def _require_env(name: str) -> str:
+def require_env(name: str) -> str:
     value = os.environ.get(name)
     if not value:
         raise RuntimeError(f"Missing required env var: {name}")
     return value
 
 
-def _connection_for(provider: Provider) -> str:
-    return _require_env(_CONNECTION_ENV_VAR[provider])
+def connection_for(provider: Provider) -> str:
+    return require_env(CONNECTION_ENV_VAR[provider])
 
 
 def get_token(user: User, provider: Provider) -> str:
@@ -51,14 +53,14 @@ def get_token(user: User, provider: Provider) -> str:
         )
 
     client = GetToken(
-        domain=_require_env("AUTH0_DOMAIN"),
-        client_id=_require_env("AUTH0_CLIENT_ID"),
-        client_secret=_require_env("AUTH0_CLIENT_SECRET"),
+        domain=require_env("AUTH0_DOMAIN"),
+        client_id=require_env("AUTH0_CLIENT_ID"),
+        client_secret=require_env("AUTH0_CLIENT_SECRET"),
     )
     response = client.access_token_for_connection(
         subject_token_type=_SUBJECT_TYPE_REFRESH_TOKEN,
         subject_token=user.auth0_refresh_token,
         requested_token_type=_REQUESTED_TOKEN_TYPE_FEDERATED_ACCESS_TOKEN,
-        connection=_connection_for(provider),
+        connection=connection_for(provider),
     )
     return response["access_token"]
